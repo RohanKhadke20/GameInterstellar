@@ -30,8 +30,11 @@ dist-ssr
 .env.test.local
 .env.production.local
 
-# SQLite databases
+# SQLite databases & runtime journals
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
+server/*.db*
