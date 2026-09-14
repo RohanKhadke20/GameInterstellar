@@ -1,0 +1,26 @@
+{
+  "name": "astrolith",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Astrolith - Fullstack Monorepo with Node.js/Express, SQLite, WebSockets, Three.js, React, and Zustand",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "start": "concurrently -n \"SERVER,CLIENT\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run start --prefix server\" \"npm run preview --prefix client\"",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "backup:db": "npm run backup:db --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "allowScripts": {
+    "sqlite3": true,
+    "esbuild": true
+  }
+}
