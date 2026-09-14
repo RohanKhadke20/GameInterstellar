@@ -165,6 +165,12 @@ export function setupWebSocketServer(httpServer) {
       try {
         const message = JSON.parse(rawMessage.toString());
 
+        // Inbound packet schema validation guard
+        if (!message || typeof message !== 'object' || typeof message.type !== 'string') {
+          ws.send(JSON.stringify({ type: 'ERROR', message: 'Malformed frame: packet must be a JSON object with a valid "type" string.' }));
+          return;
+        }
+
         switch (message.type) {
           case 'AUTH': {
             const userId = parseInt(message.userId, 10);

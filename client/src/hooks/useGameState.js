@@ -46,9 +46,11 @@ export function useGameState(userId = 1, options = {}) {
 
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState(null);
+  const [latencyMs, setLatencyMs] = useState(null);
 
   // References for socket and reconnection timers
   const wsRef = useRef(null);
+  const pingIntervalRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef(null);
   const isUnmountedRef = useRef(false);
@@ -133,6 +135,14 @@ export function useGameState(userId = 1, options = {}) {
         setConnectionStatus('connected');
         setWsConnected(true);
 
+        // Start proactive client keepalive heartbeat (every 15s)
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'PING', clientTime: Date.now() }));
+          }
+        }, 15000);
+
         // Authenticate client immediately
         socket.send(JSON.stringify({ type: 'AUTH', userId }));
       };
@@ -145,6 +155,14 @@ export function useGameState(userId = 1, options = {}) {
           addMessage(data);
 
           switch (data.type) {
+            case 'PONG': {
+              if (data.clientTime) {
+                const rtt = Date.now() - data.clientTime;
+                setLatencyMs(rtt);
+              }
+              break;
+            }
+
             case 'AUTH_SUCCESS': {
               const { user, fleet, inventory, market, incursions, offlineCatchUp } = data.payload;
               const currentState = useStore.getState();
@@ -351,6 +369,7 @@ export function useGameState(userId = 1, options = {}) {
 
         setConnectionStatus('disconnected');
         setWsConnected(false);
+        clearInterval(pingIntervalRef.current);
         wsRef.current = null;
 
         // Exponential backoff with jitter
@@ -414,6 +433,7 @@ export function useGameState(userId = 1, options = {}) {
 
     return () => {
       isUnmountedRef.current = true;
+      clearInterval(pingIntervalRef.current);
       clearTimeout(reconnectTimerRef.current);
       if (wsRef.current) {
         wsRef.current.close();
@@ -426,6 +446,7 @@ export function useGameState(userId = 1, options = {}) {
     connectionStatus,
     isConnected: connectionStatus === 'connected',
     lastSyncTimestamp,
+    latencyMs,
     sendMessage,
     reconnect
   };
