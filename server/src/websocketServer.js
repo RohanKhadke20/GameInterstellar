@@ -1,6 +1,19 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { db } from './db.js';
 import { simulationEngine } from './simulationEngine.js';
+import { InMemoryEventBus } from './events/InMemoryEventBus.js';
+import { logger } from './lib/logger.js';
+
+/**
+ * Module-level event bus instance.
+ * Swap for RedisEventBus when horizontal scaling is needed:
+ *   const eventBus = process.env.REDIS_URL
+ *     ? new RedisEventBus(process.env.REDIS_URL)
+ *     : new InMemoryEventBus();
+ *
+ * @type {import('./events/GameEvent.js').IEventBus}
+ */
+const eventBus = new InMemoryEventBus();
 
 const ALLOWED_ORIGIN = process.env.CLIENT_URL || 'http://localhost:3000';
 
@@ -191,6 +204,13 @@ export function setupWebSocketServer(httpServer) {
 
             // Trigger offline progression catch-up & initial sync
             await simulationEngine.authenticateUser(userId);
+
+            // Publish domain event — allows future Redis backplane or analytics subscribers
+            await eventBus.publish({
+              type: 'PLAYER_JOINED',
+              playerId: String(userId),
+              sessionId: `${ws._socket?.remoteAddress ?? 'unknown'}:${ws._socket?.remotePort ?? 0}`,
+            });
             break;
           }
 
@@ -200,7 +220,7 @@ export function setupWebSocketServer(httpServer) {
           }
 
           default: {
-            console.log(`[WS] Received unhandled event: ${message.type}`);
+            logger.warn('Received unhandled WS event', { eventType: message.type });
           }
         }
       } catch (err) {
@@ -215,8 +235,11 @@ export function setupWebSocketServer(httpServer) {
         if (sockets.size === 0) {
           userSockets.delete(currentUserId);
           simulationEngine.deauthenticateUser(currentUserId);
+
+          // Publish domain event — last socket for this user disconnected
+          eventBus.publish({ type: 'PLAYER_LEFT', playerId: String(currentUserId) }).catch(() => {});
         }
-        console.log(`[WS] Disconnected socket for user ${currentUserId}`);
+        logger.info('WS socket disconnected', { userId: currentUserId });
       }
     });
 
